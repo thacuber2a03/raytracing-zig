@@ -103,7 +103,7 @@ pub fn init(opts: InitOptions) Camera {
     return cam;
 }
 
-const TILE_SIZE = 64;
+const TILE_SIZE = 32;
 
 const RenderContext = struct {
     tile_idx: std.atomic.Value(usize),
@@ -259,10 +259,10 @@ pub fn render(
     var image_progress = root_progress.start("Finished tiles", total_tiles);
     defer image_progress.end();
 
-    const workers_count = if (opts.cores_amt) |c|
-        c
-    else
+    const workers_count = opts.cores_amt orelse
         @min(try std.Thread.getCpuCount() * 3 / 4, self.image_height);
+    if (workers_count == 0)
+        std.debug.panic("attempt to render image with no cores", .{});
 
     const workers = try gpa.alloc(Worker, workers_count);
     defer gpa.free(workers);
