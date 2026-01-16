@@ -15,7 +15,6 @@ pub const InitError = error{} || std.mem.Allocator.Error;
 
 pub fn initFromSlice(
     gpa: std.mem.Allocator,
-    rnd: std.Random,
     slice: []Hittable,
     start: usize,
     end: usize,
@@ -31,10 +30,15 @@ pub fn initFromSlice(
             2 => .{ objects[start], objects[start + 1] },
 
             else => sides: {
+                var bbox: AABB = .default;
+
+                for (objects[start..end]) |o|
+                    bbox = .fromBoxes(bbox, o.boundingBox());
+
                 std.sort.heap(
                     Hittable,
                     objects[start..end],
-                    rnd.intRangeAtMost(usize, 0, 2),
+                    bbox.longestAxis(),
                     struct {
                         fn boxCompare(axis: usize, a: Hittable, b: Hittable) bool {
                             const a_axis_interval = a.boundingBox().axisInterval(axis);
@@ -46,8 +50,8 @@ pub fn initFromSlice(
 
                 const mid = start + object_span / 2;
                 break :sides .{
-                    try createFromSlice(gpa, rnd, objects, start, mid),
-                    try createFromSlice(gpa, rnd, objects, mid, end),
+                    try createFromSlice(gpa, objects, start, mid),
+                    try createFromSlice(gpa, objects, mid, end),
                 };
             },
         };
@@ -61,32 +65,29 @@ pub fn initFromSlice(
 
 pub fn createFromSlice(
     gpa: std.mem.Allocator,
-    rnd: std.Random,
     slice: []Hittable,
     start: usize,
     end: usize,
 ) !Hittable {
     const node = try gpa.create(BVH);
-    node.* = try .initFromSlice(gpa, rnd, slice, start, end);
+    node.* = try .initFromSlice(gpa, slice, start, end);
     return node.hittable();
 }
 
 pub fn init(
     gpa: std.mem.Allocator,
-    rnd: std.Random,
     list: *const Hittable.List,
 ) BVH {
     const items = list.objects.items;
-    return .initSlice(gpa, rnd, items, 0, items.len);
+    return .initSlice(gpa, items, 0, items.len);
 }
 
 pub fn create(
     gpa: std.mem.Allocator,
-    rnd: std.Random,
     list: *const Hittable.List,
 ) !Hittable {
     const items = list.objects.items;
-    return createFromSlice(gpa, rnd, items, 0, items.len);
+    return createFromSlice(gpa, items, 0, items.len);
 }
 
 fn hit(ptr: *const anyopaque, r: rtw.Ray, ray_t: rtw.Interval) ?Hittable.Record {

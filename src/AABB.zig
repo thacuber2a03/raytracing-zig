@@ -6,11 +6,11 @@ const Interval = @import("Interval.zig");
 
 const AABB = @This();
 
-x: Interval = .empty,
-y: Interval = .empty,
-z: Interval = .empty,
+x: Interval,
+y: Interval,
+z: Interval,
 
-pub const empty: AABB = .{};
+pub const default: AABB = .empty;
 
 pub fn init(x: Interval, y: Interval, z: Interval) AABB {
     return .{ .x = x, .y = y, .z = z };
@@ -63,3 +63,14 @@ pub fn hit(self: *const AABB, r: rtw.Ray, ray_t: Interval) bool {
 
     return true;
 }
+
+pub fn longestAxis(self: *const AABB) usize {
+    if (self.x.size() > self.y.size()) {
+        return if (self.x.size() > self.z.size()) 0 else 2;
+    } else {
+        return if (self.y.size() > self.z.size()) 1 else 2;
+    }
+}
+
+pub const empty: AABB = .init(.empty, .empty, .empty);
+pub const universe: AABB = .init(.universe, .universe, .universe);

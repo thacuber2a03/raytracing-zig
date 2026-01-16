@@ -157,5 +157,5 @@ pub fn createDemoScene(arena: std.mem.Allocator, io: std.Io) !rtw.Hittable {
     ));
 
     world.updateBoundingBox();
-    return rtw.BVH.create(arena, rnd, world);
+    return rtw.BVH.create(arena, world);
 }
