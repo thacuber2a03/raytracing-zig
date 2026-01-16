@@ -13,29 +13,6 @@ radius: rtw.Real,
 mat: Material,
 bbox: AABB,
 
-pub fn create(
-    gpa: std.mem.Allocator,
-    static_center: rtw.Point3,
-    radius: rtw.Real,
-    mat: Material,
-) !Hittable {
-    const sphere = try gpa.create(Sphere);
-    sphere.* = .init(static_center, radius, mat);
-    return sphere.hittable();
-}
-
-pub fn createMoving(
-    gpa: std.mem.Allocator,
-    center1: rtw.Point3,
-    center2: rtw.Point3,
-    radius: rtw.Real,
-    mat: Material,
-) !Hittable {
-    const sphere = try gpa.create(Sphere);
-    sphere.* = .initMoving(center1, center2, radius, mat);
-    return sphere.hittable();
-}
-
 fn hit(ptr: *const anyopaque, r: rtw.Ray, ray_t: rtw.Interval) ?Hittable.Record {
     const self: *const Sphere = @ptrCast(@alignCast(ptr));
 
@@ -62,8 +39,16 @@ fn hit(ptr: *const anyopaque, r: rtw.Ray, ray_t: rtw.Interval) ?Hittable.Record 
     rec.t = root;
     rec.p = p;
     rec.setFaceNormal(r, outward_normal);
+    rec.u, rec.v = getSphereUV(outward_normal);
     rec.mat = self.mat;
     return rec;
+}
+
+fn getSphereUV(p: rtw.Point3) struct { rtw.Real, rtw.Real } {
+    const pi = std.math.pi;
+    const theta = std.math.acos(-p[1]);
+    const phi = std.math.atan2(-p[2], p[0]) + pi;
+    return .{ phi / (2 * pi), theta / pi };
 }
 
 pub fn boundingBox(self: *const anyopaque) AABB {
@@ -78,6 +63,29 @@ pub fn hittable(self: *Sphere) Hittable {
             .boundingBox = boundingBox,
         },
     };
+}
+
+pub fn create(
+    gpa: std.mem.Allocator,
+    static_center: rtw.Point3,
+    radius: rtw.Real,
+    mat: Material,
+) !Hittable {
+    const sphere = try gpa.create(Sphere);
+    sphere.* = .init(static_center, radius, mat);
+    return sphere.hittable();
+}
+
+pub fn createMoving(
+    gpa: std.mem.Allocator,
+    center1: rtw.Point3,
+    center2: rtw.Point3,
+    radius: rtw.Real,
+    mat: Material,
+) !Hittable {
+    const sphere = try gpa.create(Sphere);
+    sphere.* = .initMoving(center1, center2, radius, mat);
+    return sphere.hittable();
 }
 
 pub fn init(static_center: rtw.Point3, radius: rtw.Real, mat: Material) Sphere {

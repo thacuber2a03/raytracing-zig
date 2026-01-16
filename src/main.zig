@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const clap = @import("clap");
+
 const rtw = @import("raytracing");
 const vec = rtw.vec;
 const Sphere = rtw.Hittable.Sphere;
@@ -11,15 +13,12 @@ const RenderOptions = rtw.Camera.RenderOptions;
 const InitOptions = rtw.Camera.InitOptions;
 
 const help_message =
-    \\usage: raytracing -h | [-c <n>] [-o <path>] [-r] [demo index]
+    \\usage: raytracing --help | [-c <n>] [-o <path>] [-r] [demo index]
     \\
-    \\    -h           - show this help message
-    \\
-    \\    -c <n>       - set number of cores to render with, default: `cpu_count / 3 * 4`
-    \\    -o <path>    - specify output path, default: outputs to stdout
-    \\
-    \\    -r           - "release mode";
-    \\                   1200x675 px, 500 samples per pixel
+    \\    -h, --help          - show this help message
+    \\    -c, --cores <n>     - set number of cores to render with, default: `cpu_count / 3 * 4`
+    \\    -o, --output <path> - specify output path, default: outputs to stdout
+    \\    -r, --release       - "release mode"; 1200x675 px, 500 samples per pixel
     \\
     \\    [demo index] - what demo to render, defaults to 1
     \\
@@ -31,40 +30,36 @@ const help_message =
 const max_demo_amount = 2;
 
 fn helpAndStop(
-    io: std.Io,
     comptime fmt: []const u8,
     args: anytype,
     comptime code: u8,
 ) !void {
     var stderr_buffer: [1024]u8 = undefined;
-    var stderr_writer: std.Io.File.Writer = .init(.stderr(), io, &stderr_buffer);
+    var stderr_writer: std.fs.File.Writer = .init(.stderr(), &stderr_buffer);
     const stderr = &stderr_writer.interface;
 
-    if (code != 0) try stderr.writeAll("error: ");
-    try stderr.print(fmt, args);
-    try stderr.writeByte('\n');
-    if (fmt.len != 0) try stderr.writeByte('\n');
+    if (fmt.len != 0) {
+        if (code != 0) try stderr.writeAll("error: ");
+        try stderr.print(fmt, args);
+        try stderr.writeAll("\n\n");
+    }
+
     try stderr.print("{s}\n", .{help_message});
     try stderr.flush();
     std.process.exit(code);
 }
 
-inline fn die(io: std.Io, comptime fmt: []const u8, args: anytype) !void {
-    return helpAndStop(io, fmt, args, 64);
+inline fn die(comptime fmt: []const u8, args: anytype) !void {
+    return helpAndStop(fmt, args, 64);
 }
 
-const DemoContext = struct {
-    arena: *std.heap.ArenaAllocator,
-    gpa: std.mem.Allocator,
-    io: std.Io,
-    rnd: std.Random,
-    release_mode: bool,
-    render_opts: RenderOptions,
-};
+pub fn main() !void {
+    var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena_allocator.deinit();
 
-pub fn main(init: std.process.Init) !void {
-    const io = init.io;
-    const arena = init.arena.allocator();
+    var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
+    defer _ = debug_allocator.deinit();
+    const gpa = debug_allocator.allocator();
 
     var render_opts: RenderOptions = .{
         .cores_amt = null,
@@ -74,56 +69,49 @@ pub fn main(init: std.process.Init) !void {
     var demo: usize = 1;
     var release_mode = false;
 
-    var args_it = try init.minimal.args.iterateAllocator(arena);
+    _ = &render_opts;
+    _ = &demo;
+    _ = &release_mode;
 
-    _ = args_it.next(); // exename, should print it, will deal with it later
+    const params = comptime clap.parseParamsComptime(
+        \\ -h, --help          show this help message
+        \\ -c, --cores <usize> set number of cores to render with, default: `cpu_count / 3 * 4`
+        \\ -o, --output <str>  specify output path, default: outputs to stdout
+        \\ -r, --release       "release mode"; 1200x675 px, 500 samples per pixel
+        \\ <usize>             what demo to render, defaults to 1
+    );
 
-    while (args_it.next()) |a| {
-        if (a[0] == '-') {
-            switch (a[1]) {
-                'c' => {
-                    const err = "expected number after -c";
-                    if (args_it.next()) |c| {
-                        const cores = std.fmt.parseInt(usize, c, 10) catch |e| switch (e) {
-                            error.InvalidCharacter => return die(io, err, .{}),
-                            else => return e,
-                        };
+    var diag: clap.Diagnostic = .{};
+    var res = clap.parse(clap.Help, &params, clap.parsers.default, .{
+        .diagnostic = &diag,
+        .allocator = gpa,
+    }) catch |err| {
+        try diag.reportToFile(.stderr(), err);
+        return err;
+    };
+    defer res.deinit();
 
-                        if (cores == 0 or cores > try std.Thread.getCpuCount())
-                            try die(io, "invalid number of cores", .{});
+    if (res.args.help != 0)
+        try helpAndStop("", .{}, 0)
+    else {
+        if (res.args.cores) |c| {
+            if (c == 0 or c > try std.Thread.getCpuCount())
+                try die("invalid amount of CPU cores", .{});
 
-                        render_opts.cores_amt = cores;
-                    } else try die(io, err, .{});
-                },
-
-                'o' => if (args_it.next()) |o| {
-                    render_opts.output_file = o;
-                } else try die(io, "expected filepath after '-o'", .{}),
-
-                'h' => try helpAndStop(io, "", .{}, 0),
-
-                'r' => release_mode = true,
-
-                else => |c| try die(io, "unknown flag '{c}'", .{c}),
-            }
-        } else {
-            demo = std.fmt.parseInt(usize, a, 10) catch |e| switch (e) {
-                error.InvalidCharacter => return die(io, "unexpected argument '{s}'", .{a}),
-                else => return e,
-            };
-            if (demo == 0 or demo > max_demo_amount) try die(io, "invalid demo index {}", .{demo});
+            render_opts.cores_amt = c;
         }
+
+        release_mode = res.args.release != 0;
+        if (res.args.output) |o| render_opts.output_file = o;
+        if (res.positionals[0]) |d| demo = d;
     }
 
-    var seed: [@sizeOf(u64)]u8 = undefined;
-    io.random(&seed);
-    var prng = std.Random.DefaultPrng.init(@bitCast(seed));
+    var prng = std.Random.DefaultPrng.init(std.crypto.random.int(u64));
     const rnd = prng.random();
 
     const demo_ctx: DemoContext = .{
-        .arena = init.arena,
-        .gpa = init.gpa,
-        .io = init.io,
+        .arena = &arena_allocator,
+        .gpa = gpa,
         .release_mode = release_mode,
         .render_opts = render_opts,
         .rnd = rnd,
@@ -136,6 +124,14 @@ pub fn main(init: std.process.Init) !void {
         else => unreachable,
     };
 }
+
+const DemoContext = struct {
+    arena: *std.heap.ArenaAllocator,
+    gpa: std.mem.Allocator,
+    rnd: std.Random,
+    release_mode: bool,
+    render_opts: RenderOptions,
+};
 
 pub fn renderBouncingBallsDemo(ctx: DemoContext) !void {
     const arena = ctx.arena.allocator();
@@ -207,7 +203,6 @@ pub fn renderBouncingBallsDemo(ctx: DemoContext) !void {
 
     try render(.{
         .gpa = ctx.gpa,
-        .io = ctx.io,
         .world = try rtw.BVH.create(arena, world),
         .init_opts = .{
             .aspect_ratio = 16.0 / 9.0,
@@ -256,7 +251,6 @@ pub fn renderCheckeredSpheresDemo(ctx: DemoContext) !void {
     world.updateBoundingBox();
     try render(.{
         .gpa = ctx.gpa,
-        .io = ctx.io,
         .world = world.hittable(),
         .init_opts = .{
             .aspect_ratio = 16.0 / 9.0,
@@ -277,7 +271,6 @@ pub fn renderCheckeredSpheresDemo(ctx: DemoContext) !void {
 
 const RenderContext = struct {
     gpa: std.mem.Allocator,
-    io: std.Io,
     world: rtw.Hittable,
     init_opts: InitOptions,
     render_opts: RenderOptions,
@@ -285,5 +278,5 @@ const RenderContext = struct {
 
 pub fn render(ctx: RenderContext) !void {
     var cam: rtw.Camera = .init(ctx.init_opts);
-    try cam.render(ctx.gpa, ctx.io, ctx.world, ctx.render_opts);
+    try cam.render(ctx.gpa, ctx.world, ctx.render_opts);
 }

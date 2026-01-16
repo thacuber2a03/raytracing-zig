@@ -4,13 +4,9 @@ psst, if you're in GitHub, this repository is [mirrored from Codeberg](https://c
 
 # raytrazig
 
-the Raytracing series of books implemented in Zig
+the Raytracing series of books implemented in Zig 0.15.2.
 
 currently following Raytracing the Next Week, output is right after finishing checkered textures
-
-**NOTE:** this project was made with Zig master (0.16.0-dev).
-
-<!-- the lack of *anything* in master is annoying. I really should switch to 0.15.2... -->
 
 ![screenshot of output PPM file](./meta/book_demo.png)
 

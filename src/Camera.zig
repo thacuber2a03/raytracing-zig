@@ -1,5 +1,5 @@
 const std = @import("std");
-const Io = std.Io;
+const fs = std.fs;
 
 const rtw = @import("root.zig");
 const vec = rtw.vec;
@@ -232,16 +232,13 @@ pub const RenderOptions = struct {
 pub fn render(
     self: *Camera,
     gpa: std.mem.Allocator,
-    io: Io,
     world: rtw.Hittable,
     opts: RenderOptions,
 ) !void {
-    var root_progress = std.Progress.start(io, .{});
+    var root_progress = std.Progress.start(.{});
     defer root_progress.end();
 
-    var rnd_buf: [@sizeOf(u64)]u8 = undefined;
-    io.random(&rnd_buf);
-    var prng = std.Random.DefaultPrng.init(@bitCast(rnd_buf));
+    var prng = std.Random.DefaultPrng.init(std.crypto.random.int(u64));
 
     const num_tiles_x = (self.image_width + TILE_SIZE - 1) / TILE_SIZE;
     const num_tiles_y = (self.image_height + TILE_SIZE - 1) / TILE_SIZE;
@@ -289,15 +286,15 @@ pub fn render(
 
     ////////////////////////////////////////////////////////////////////////////////
 
-    var file_handle: Io.File = if (opts.output_file) |path|
-        try Io.Dir.cwd().createFile(io, path, .{})
+    var file_handle: fs.File = if (opts.output_file) |path|
+        try std.fs.cwd().createFile(path, .{})
     else
         .stdout();
 
-    defer if (opts.output_file) |_| file_handle.close(io);
+    defer if (opts.output_file) |_| file_handle.close();
 
     var file_buffer: [1024]u8 = undefined;
-    var file_writer = file_handle.writer(io, &file_buffer);
+    var file_writer = file_handle.writer(&file_buffer);
     const file = &file_writer.interface;
 
     try file.print("P3\n{} {}\n255\n", .{ self.image_width, self.image_height });
