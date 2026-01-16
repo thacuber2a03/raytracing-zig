@@ -6,7 +6,7 @@ psst, if you're in GitHub, this repository is [mirrored from Codeberg](https://c
 
 the Raytracing series of books implemented in Zig
 
-currently following Raytracing the Next Week, output is right after finishing textures
+currently following Raytracing the Next Week, output is right after finishing checkered textures
 
 **NOTE:** this project was made with Zig master (0.16.0-dev).
 
