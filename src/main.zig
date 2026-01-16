@@ -41,7 +41,9 @@ pub fn main(init: std.process.Init) !void {
     var output_file: ?[]const u8 = null;
 
     var args_it = try init.minimal.args.iterateAllocator(arena);
+
     _ = args_it.next(); // exename, should print it, will deal with it later
+
     while (args_it.next()) |a| {
         if (a[0] == '-')
             try switch (a[1]) {
@@ -120,8 +122,8 @@ pub fn createDemoScene(arena: std.mem.Allocator, io: std.Io) !rtw.Hittable {
                 try world.objects.append(arena, res: {
                     if (choose_mat < 0.8) {
                         const mat = try Lambertian.create(arena, vec.random(rnd) * vec.random(rnd));
-                        // const center2 = center + rtw.Vec3{ 0, rtw.randomRange(rnd, 0, 0.5), 0 };
-                        break :res try Sphere.create(arena, center, 0.2, mat);
+                        const center2 = center + rtw.Vec3{ 0, rtw.randomRange(rnd, 0, 0.5), 0 };
+                        break :res try Sphere.createMoving(arena, center, center2, 0.2, mat);
                     } else {
                         const mat = try if (choose_mat < 0.95)
                             Metal.create(arena, vec.randomRange(rnd, 0.5, 1), rtw.randomRange(rnd, 0, 0.5))
