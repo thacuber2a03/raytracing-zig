@@ -124,7 +124,6 @@ const Worker = struct {
         while (true) {
             const tile_idx = ctx.tile_idx.fetchAdd(1, .monotonic);
             if (tile_idx >= ctx.total_tiles) break;
-            self.tile_progress.setCompletedItems(0);
 
             const tx = tile_idx % ctx.num_tiles_x;
             const ty = tile_idx / ctx.num_tiles_x;
@@ -135,12 +134,10 @@ const Worker = struct {
             const x_end = @min(x_start + TILE_SIZE, cam.image_width);
             const y_end = @min(y_start + TILE_SIZE, cam.image_height);
 
+            self.tile_progress.setCompletedItems(0);
             self.draw(cam, x_start, y_start, x_end, y_end);
-
             self.image_progress.completeOne();
         }
-
-        self.tile_progress.end();
     }
 
     pub fn draw(
