@@ -25,9 +25,10 @@ const help_message =
     \\demos:
     \\1 - book demo render + checkered floor
     \\2 - two checkered spheres
+    \\3 - earth
 ;
 
-const max_demo_amount = 2;
+const max_demo_amount = 3;
 
 fn helpAndStop(
     comptime fmt: []const u8,
@@ -121,6 +122,7 @@ pub fn main() !void {
     try switch (demo) {
         1 => renderBouncingBallsDemo(demo_ctx),
         2 => renderCheckeredSpheresDemo(demo_ctx),
+        3 => renderEarthDemo(demo_ctx),
         else => unreachable,
     };
 }
@@ -260,7 +262,35 @@ pub fn renderCheckeredSpheresDemo(ctx: DemoContext) !void {
 
             .vfov = 20,
             .lookfrom = .{ 13, 2, 3 },
-            .lookat = .{ 0, 0, 0 },
+            .lookat = vec.zero,
+            .vup = .{ 0, 1, 0 },
+
+            .defocus_angle = 0,
+        },
+        .render_opts = ctx.render_opts,
+    });
+}
+
+pub fn renderEarthDemo(ctx: DemoContext) !void {
+    var image_manager = rtw.ImageManager.init(ctx.gpa);
+    defer image_manager.deinit();
+
+    var earth_texture: rtw.Texture.Image = try .init(&image_manager, "assets/earthmap.jpg");
+    var earth_surface: Lambertian = .init(earth_texture.texture());
+    var globe: Sphere = .init(vec.zero, 2, earth_surface.material());
+
+    try render(.{
+        .gpa = ctx.gpa,
+        .world = globe.hittable(),
+        .init_opts = .{
+            .aspect_ratio = 16.0 / 9.0,
+            .image_width = if (ctx.release_mode) 1200 else 400,
+            .samples_per_pixel = if (ctx.release_mode) 500 else 10,
+            .max_depth = 50,
+
+            .vfov = 20,
+            .lookfrom = .{ 0, 0, 12 },
+            .lookat = vec.zero,
             .vup = .{ 0, 1, 0 },
 
             .defocus_angle = 0,

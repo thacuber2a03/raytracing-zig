@@ -13,6 +13,13 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const zigimg = b.dependency("zigimg", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    mod.addImport("zigimg", zigimg.module("zigimg"));
+
     const exe = b.addExecutable(.{
         .name = name,
         .root_module = b.createModule(.{

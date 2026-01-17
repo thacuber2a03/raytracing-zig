@@ -7,6 +7,7 @@ pub const Hittable = @import("Hittable.zig");
 pub const Interval = @import("Interval.zig");
 pub const Material = @import("Material.zig");
 pub const Texture = @import("Texture.zig");
+pub const ImageManager = @import("ImageManager.zig");
 pub const vec = @import("vec.zig");
 
 const rtw = @This();
